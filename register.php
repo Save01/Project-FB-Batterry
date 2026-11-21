@@ -102,8 +102,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Fetch car brands for initial load
-$brandsStmt = $db->query("SELECT * FROM car_brands ORDER BY name");
+$brandsStmt = $db->query("SELECT * FROM car_brands ORDER BY type, name");
 $allBrands = $brandsStmt->fetchAll();
+
+$oldVehicleTypes = $_POST['vehicle_type'] ?? [''];
+$oldVehicleBrands = $_POST['vehicle_brand'] ?? [''];
+$oldVehicleModels = $_POST['vehicle_model'] ?? [''];
+$oldVehiclePlates = $_POST['vehicle_plate'] ?? [''];
+$numVehicles = max(1, count($oldVehicleTypes));
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -334,33 +340,65 @@ $allBrands = $brandsStmt->fetchAll();
                     </div>
 
                     <div id="vehicleContainer">
-                        <div class="vehicle-row" id="vehicle-0">
-                            <span class="vehicle-number">รถคันที่ 1</span>
+                        <?php for ($idx = 0; $idx < $numVehicles; $idx++):
+                            $curType = $oldVehicleTypes[$idx] ?? '';
+                            $curBrand = $oldVehicleBrands[$idx] ?? '';
+                            $curModel = $oldVehicleModels[$idx] ?? '';
+                            $curPlate = $oldVehiclePlates[$idx] ?? '';
+                        ?>
+                        <div class="vehicle-row" id="vehicle-<?= $idx ?>">
+                            <span class="vehicle-number">รถคันที่ <?= $idx + 1 ?></span>
+                            <?php if ($idx > 0): ?>
+                            <button type="button" class="btn btn-sm btn-danger btn-remove-vehicle rounded-pill" onclick="removeVehicle(this)">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                            <?php endif; ?>
                             <div class="row g-2 mt-1">
                                 <div class="col-md-6">
                                     <label class="form-label">ประเภทรถ <span class="text-danger">*</span></label>
                                     <select class="form-select vehicle-type" name="vehicle_type[]" required onchange="filterBrands(this)">
                                         <option value="">-- เลือกประเภท --</option>
-                                        <option value="car">รถยนต์</option>
-                                        <option value="motorcycle">มอเตอร์ไซค์</option>
+                                        <option value="car" <?= $curType === 'car' ? 'selected' : '' ?>>รถยนต์</option>
+                                        <option value="motorcycle" <?= $curType === 'motorcycle' ? 'selected' : '' ?>>มอเตอร์ไซค์</option>
                                     </select>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">ยี่ห้อรถ <span class="text-danger">*</span></label>
-                                    <select class="form-select vehicle-brand" name="vehicle_brand[]" required>
-                                        <option value="">-- เลือกยี่ห้อ --</option>
+                                    <select class="form-select vehicle-brand" name="vehicle_brand[]" required onchange="onBrandChange(this)">
+                                        <option value="">-- เลือกยี่ห้อรถ --</option>
+                                        <?php if ($curType === 'car'): ?>
+                                            <?php foreach ($allBrands as $b): if ($b['type'] === 'car' || $b['type'] === 'both'): ?>
+                                                <option value="<?= $b['id'] ?>" data-type="<?= $b['type'] ?>" <?= (string)$b['id'] === (string)$curBrand ? 'selected' : '' ?>><?= htmlspecialchars($b['name']) ?></option>
+                                            <?php endif; endforeach; ?>
+                                        <?php elseif ($curType === 'motorcycle'): ?>
+                                            <?php foreach ($allBrands as $b): if ($b['type'] === 'motorcycle' || $b['type'] === 'both'): ?>
+                                                <option value="<?= $b['id'] ?>" data-type="<?= $b['type'] ?>" <?= (string)$b['id'] === (string)$curBrand ? 'selected' : '' ?>><?= htmlspecialchars($b['name']) ?></option>
+                                            <?php endif; endforeach; ?>
+                                        <?php else: ?>
+                                            <optgroup label="ยี่ห้อรถยนต์" class="optgroup-car">
+                                                <?php foreach ($allBrands as $b): if ($b['type'] === 'car' || $b['type'] === 'both'): ?>
+                                                    <option value="<?= $b['id'] ?>" data-type="<?= $b['type'] ?>" <?= (string)$b['id'] === (string)$curBrand ? 'selected' : '' ?>><?= htmlspecialchars($b['name']) ?></option>
+                                                <?php endif; endforeach; ?>
+                                            </optgroup>
+                                            <optgroup label="ยี่ห้อมอเตอร์ไซค์" class="optgroup-motorcycle">
+                                                <?php foreach ($allBrands as $b): if ($b['type'] === 'motorcycle' || $b['type'] === 'both'): ?>
+                                                    <option value="<?= $b['id'] ?>" data-type="<?= $b['type'] ?>" <?= (string)$b['id'] === (string)$curBrand ? 'selected' : '' ?>><?= htmlspecialchars($b['name']) ?></option>
+                                                <?php endif; endforeach; ?>
+                                            </optgroup>
+                                        <?php endif; ?>
                                     </select>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">รุ่นรถ <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" name="vehicle_model[]" required placeholder="เช่น Civic, PCX">
+                                    <input type="text" class="form-control" name="vehicle_model[]" value="<?= htmlspecialchars($curModel) ?>" required placeholder="เช่น Civic, PCX">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">เลขทะเบียนรถ <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" name="vehicle_plate[]" required placeholder="เช่น กข-1234">
+                                    <input type="text" class="form-control" name="vehicle_plate[]" value="<?= htmlspecialchars($curPlate) ?>" required placeholder="เช่น กข-1234">
                                 </div>
                             </div>
                         </div>
+                        <?php endfor; ?>
                     </div>
 
                     <div class="d-grid mt-4">
@@ -385,7 +423,8 @@ $allBrands = $brandsStmt->fetchAll();
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let vehicleCount = 1;
+        let vehicleCount = <?= $numVehicles ?>;
+        const allBrandsData = <?= json_encode($allBrands, JSON_UNESCAPED_UNICODE) ?>;
 
         function togglePwd(inputId, iconId) {
             const input = document.getElementById(inputId);
@@ -399,30 +438,61 @@ $allBrands = $brandsStmt->fetchAll();
             }
         }
 
+        function getBrandOptionsHTML(type, selectedBrandId = '') {
+            let html = '<option value="">-- เลือกยี่ห้อรถ --</option>';
+            if (!type) {
+                html += '<optgroup label="ยี่ห้อรถยนต์">';
+                allBrandsData.filter(b => b.type === 'car' || b.type === 'both').forEach(b => {
+                    const sel = (String(b.id) === String(selectedBrandId)) ? 'selected' : '';
+                    html += `<option value="${b.id}" data-type="${b.type}" ${sel}>${b.name}</option>`;
+                });
+                html += '</optgroup>';
+                html += '<optgroup label="ยี่ห้อมอเตอร์ไซค์">';
+                allBrandsData.filter(b => b.type === 'motorcycle' || b.type === 'both').forEach(b => {
+                    const sel = (String(b.id) === String(selectedBrandId)) ? 'selected' : '';
+                    html += `<option value="${b.id}" data-type="${b.type}" ${sel}>${b.name}</option>`;
+                });
+                html += '</optgroup>';
+            } else if (type === 'car') {
+                allBrandsData.filter(b => b.type === 'car' || b.type === 'both').forEach(b => {
+                    const sel = (String(b.id) === String(selectedBrandId)) ? 'selected' : '';
+                    html += `<option value="${b.id}" data-type="${b.type}" ${sel}>${b.name}</option>`;
+                });
+            } else if (type === 'motorcycle') {
+                allBrandsData.filter(b => b.type === 'motorcycle' || b.type === 'both').forEach(b => {
+                    const sel = (String(b.id) === String(selectedBrandId)) ? 'selected' : '';
+                    html += `<option value="${b.id}" data-type="${b.type}" ${sel}>${b.name}</option>`;
+                });
+            }
+            return html;
+        }
+
         function filterBrands(selectEl) {
             const type = selectEl.value;
             const row = selectEl.closest('.vehicle-row');
             const brandSelect = row.querySelector('.vehicle-brand');
+            const currentVal = brandSelect.value;
+            brandSelect.innerHTML = getBrandOptionsHTML(type, currentVal);
+        }
 
-            brandSelect.innerHTML = '<option value="">-- กำลังโหลด... --</option>';
-
-            if (!type) {
-                brandSelect.innerHTML = '<option value="">-- เลือกยี่ห้อ --</option>';
-                return;
+        function onBrandChange(selectEl) {
+            const brandId = selectEl.value;
+            if (!brandId) return;
+            const brand = allBrandsData.find(b => String(b.id) === String(brandId));
+            if (!brand) return;
+            const row = selectEl.closest('.vehicle-row');
+            const typeSelect = row.querySelector('.vehicle-type');
+            
+            // Auto-select vehicle type if empty or mismatched
+            if (brand.type === 'car') {
+                typeSelect.value = 'car';
+            } else if (brand.type === 'motorcycle') {
+                typeSelect.value = 'motorcycle';
+            } else if (brand.type === 'both') {
+                if (!typeSelect.value) {
+                    typeSelect.value = 'car';
+                }
             }
-
-            fetch('<?= SITE_URL ?>api/get_brands.php?type=' + encodeURIComponent(type))
-                .then(r => r.json())
-                .then(data => {
-                    let html = '<option value="">-- เลือกยี่ห้อ --</option>';
-                    data.forEach(b => {
-                        html += `<option value="${b.id}">${b.name}</option>`;
-                    });
-                    brandSelect.innerHTML = html;
-                })
-                .catch(() => {
-                    brandSelect.innerHTML = '<option value="">-- ไม่สามารถโหลดข้อมูลได้ --</option>';
-                });
         }
 
         function addVehicle() {
@@ -447,8 +517,8 @@ $allBrands = $brandsStmt->fetchAll();
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">ยี่ห้อรถ <span class="text-danger">*</span></label>
-                        <select class="form-select vehicle-brand" name="vehicle_brand[]" required>
-                            <option value="">-- เลือกยี่ห้อ --</option>
+                        <select class="form-select vehicle-brand" name="vehicle_brand[]" required onchange="onBrandChange(this)">
+                            ${getBrandOptionsHTML('')}
                         </select>
                     </div>
                     <div class="col-md-6">
@@ -468,8 +538,8 @@ $allBrands = $brandsStmt->fetchAll();
             const row = btn.closest('.vehicle-row');
             row.remove();
             // Re-number
-            vehicleCount--;
             const rows = document.querySelectorAll('.vehicle-row');
+            vehicleCount = rows.length;
             rows.forEach((r, i) => {
                 r.querySelector('.vehicle-number').textContent = 'รถคันที่ ' + (i + 1);
             });
